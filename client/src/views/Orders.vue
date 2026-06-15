@@ -8,6 +8,64 @@
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
     <div v-else-if="error" class="error">{{ error }}</div>
     <div v-else>
+
+      <!-- Submitted Restocking Orders — collapsible, shown only when orders exist -->
+      <div v-if="restockingOrders.length" class="card restocking-section">
+        <div
+          class="card-header restocking-header"
+          @click="restockingSectionOpen = !restockingSectionOpen"
+        >
+          <h3 class="card-title">
+            {{ t('orders.submittedOrders') }}
+            <span class="badge restocking-badge">{{ restockingOrders.length }}</span>
+          </h3>
+          <span
+            class="collapse-arrow"
+            :style="{ transform: restockingSectionOpen ? 'rotate(0deg)' : 'rotate(-90deg)' }"
+          >▼</span>
+        </div>
+        <div v-show="restockingSectionOpen" class="table-container">
+          <table class="orders-table">
+            <thead>
+              <tr>
+                <th class="col-order-number">{{ t('orders.table.orderNumber') }}</th>
+                <th class="col-items">{{ t('orders.table.items') }}</th>
+                <th class="col-status">{{ t('orders.table.status') }}</th>
+                <th class="col-date">{{ t('orders.table.orderDate') }}</th>
+                <th class="col-date">{{ t('orders.table.expectedDelivery') }}</th>
+                <th class="col-value">{{ t('orders.table.totalValue') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="order in restockingOrders" :key="order.id" class="restocking-row">
+                <td class="col-order-number"><strong>{{ order.order_number }}</strong></td>
+                <td class="col-items">
+                  <details class="items-details">
+                    <summary class="items-summary">
+                      {{ t('orders.itemsCount', { count: order.items.length }) }}
+                    </summary>
+                    <div class="items-dropdown">
+                      <div v-for="(item, idx) in order.items" :key="idx" class="item-entry">
+                        <span class="item-name">{{ item.name }}</span>
+                        <span class="item-meta">{{ t('orders.quantity') }}: {{ item.quantity }} @ {{ currencySymbol }}{{ item.unit_price }}</span>
+                      </div>
+                    </div>
+                  </details>
+                </td>
+                <td class="col-status">
+                  <span :class="['badge', getOrderStatusClass(order.status)]">
+                    {{ t(`status.${order.status.toLowerCase()}`) }}
+                  </span>
+                </td>
+                <td class="col-date">{{ formatDate(order.order_date) }}</td>
+                <td class="col-date">{{ formatDate(order.expected_delivery) }}</td>
+                <td class="col-value"><strong>{{ currencySymbol }}{{ order.total_value.toLocaleString() }}</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <div class="stats-grid">
         <div class="stat-card success">
           <div class="stat-label">{{ t('status.delivered') }}</div>
@@ -29,7 +87,7 @@
 
       <div class="card">
         <div class="card-header">
-          <h3 class="card-title">{{ t('orders.allOrders') }} ({{ orders.length }})</h3>
+          <h3 class="card-title">{{ t('orders.allOrders') }} ({{ customerOrders.length }})</h3>
         </div>
         <div class="table-container">
           <table class="orders-table">
@@ -45,7 +103,7 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="order in orders" :key="order.id">
+              <tr v-for="order in customerOrders" :key="order.id">
                 <td class="col-order-number"><strong>{{ order.order_number }}</strong></td>
                 <td class="col-customer">{{ translateCustomerName(order.customer) }}</td>
                 <td class="col-items">
@@ -96,6 +154,15 @@ export default {
     const error = ref(null)
     const orders = ref([])
 
+    // Split raw orders (includes restocking orders merged by backend) into separate views
+    const customerOrders = computed(() =>
+      orders.value.filter(o => !o.order_type || o.order_type === 'Customer')
+    )
+    const restockingOrders = computed(() =>
+      orders.value.filter(o => o.order_type === 'Restocking')
+    )
+    const restockingSectionOpen = ref(true)
+
     // Use shared filters
     const {
       selectedPeriod,
@@ -130,7 +197,7 @@ export default {
     })
 
     const getOrdersByStatus = (status) => {
-      return orders.value.filter(order => order.status === status)
+      return customerOrders.value.filter(order => order.status === status)
     }
 
     const getOrderStatusClass = (status) => {
@@ -160,6 +227,9 @@ export default {
       loading,
       error,
       orders,
+      customerOrders,
+      restockingOrders,
+      restockingSectionOpen,
       getOrdersByStatus,
       getOrderStatusClass,
       formatDate,
@@ -172,6 +242,36 @@ export default {
 </script>
 
 <style scoped>
+.restocking-section {
+  border-left: 4px solid #7c3aed;
+}
+
+.restocking-header {
+  cursor: pointer;
+  user-select: none;
+}
+
+.restocking-row {
+  background: #faf5ff;
+}
+
+.restocking-row:hover {
+  background: #f3e8ff;
+}
+
+.restocking-badge {
+  background: #ede9fe;
+  color: #5b21b6;
+  margin-left: 0.5rem;
+}
+
+.collapse-arrow {
+  font-size: 0.75rem;
+  color: #64748b;
+  transition: transform 0.2s;
+  display: inline-block;
+}
+
 /* Fixed table layout to prevent column shifting */
 .orders-table {
   table-layout: fixed;
